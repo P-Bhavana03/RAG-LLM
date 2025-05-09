@@ -23,9 +23,14 @@ def load_and_split_uploaded_pdf(uploaded_file, chunk_size, chunk_overlap, temp_d
     if uploaded_file is None:
         return None
 
+    try:
+        os.makedirs(temp_dir, exist_ok=True)
+    except OSError as e:
+        st.error(f"🔴 Error creating temporary directory '{temp_dir}': {e}")
+        return None
+
     file_name = uploaded_file.name
     try:
-        # Create a temporary file to store the uploaded content
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=".pdf", dir=temp_dir
         ) as tmp_file:
@@ -52,7 +57,6 @@ def load_and_split_uploaded_pdf(uploaded_file, chunk_size, chunk_overlap, temp_d
             st.warning(f"⚠️ Splitting '{file_name}' resulted in zero chunks.")
             return None
 
-        # Add filename metadata to each chunk
         for chunk in chunks:
             chunk.metadata[METADATA_SOURCE_KEY] = file_name
             chunk.metadata["page"] = chunk.metadata.get("page", "N/A") + 1
@@ -64,6 +68,5 @@ def load_and_split_uploaded_pdf(uploaded_file, chunk_size, chunk_overlap, temp_d
         st.error(f"🔴 Error processing '{file_name}': {e}")
         return None
     finally:
-        # Clean up the temporary file
         if "tmp_file_path" in locals() and os.path.exists(tmp_file_path):
             os.remove(tmp_file_path)

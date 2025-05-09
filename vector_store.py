@@ -12,7 +12,6 @@ from config import (
 )
 
 
-# Embedding Function (Cached)
 @st.cache_resource(show_spinner="Initializing Embeddings...")
 def get_embedding_function():
     """Initializes and returns the embedding function."""
@@ -43,7 +42,6 @@ def initialize_vector_store(_embeddings):
             persist_directory=CHROMA_PERSIST_DIR,
             embedding_function=_embeddings,
         )
-        # Small check to ensure connection is working (optional)
         vector_store._client.heartbeat()
         st.success(f"✅ Connected to ChromaDB collection '{COLLECTION_NAME}'.")
         return vector_store
@@ -85,7 +83,6 @@ def delete_documents_from_store(vector_store, filenames_to_delete):
         st.success(f"✅ Deleted documents: {', '.join(filenames_to_delete)}")
         return True
     except Exception as e:
-        # Catch potential errors if trying to delete non-existent items etc.
         st.error(f"🔴 Error deleting documents: {e}")
         return False
 
