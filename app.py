@@ -2,6 +2,8 @@ import streamlit as st
 import os
 import time
 import logging
+import re
+import requests
 
 # Configure logging
 logging.basicConfig(
@@ -158,7 +160,7 @@ with st.sidebar:
                 st.sidebar.success(
                     f"Added: {', '.join(successfully_added_files_names)} ({new_chunks_added_count} new chunks)."
                 )
-            elif files_to_add:  # Attempted to add but none succeeded
+            elif files_to_add:
                 st.sidebar.warning(
                     "Attempted to process new files, but no new embeddings were added."
                 )
@@ -235,25 +237,121 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 
-# Placeholder functions for tools
+# Tool handler functions
 def handle_calculation(query: str) -> str:
     logging.info(f"Calculator received query: {query}")
-    if "what is" in query.lower():  # Example: "calculate what is 5 + 3"
-        parts = query.lower().split("what is")[-1].strip().replace("?", "")
-        try:
-            result = eval(parts)
-            return f"The result of '{parts}' is {result}."
-        except Exception:
-            return f"I can attempt basic arithmetic. Could not calculate '{parts}'."
-    return f"Calculator tool would process: '{query}'"
+    expression_to_eval = ""
+    query_lower = query.lower()
+
+    if "what is" in query_lower:
+        expression_to_eval = (
+            query_lower.split("what is", 1)[-1].strip().replace("?", "")
+        )
+    elif query_lower.startswith("calculate "):
+        expression_to_eval = (
+            query_lower.replace("calculate ", "", 1).strip().replace("?", "")
+        )
+
+    if expression_to_eval:
+        sanitized_expression = "".join(
+            char for char in expression_to_eval if char in "0123456789.+-*/() "
+        )
+
+        if not sanitized_expression or not re.fullmatch(
+            r"[\d\s\.\+\-\*\/\(\)]+", sanitized_expression
+        ):
+            logging.warning(
+                f"Invalid characters in expression or empty after sanitization: '{expression_to_eval}' -> '{sanitized_expression}'"
+            )
+            return f"Could not calculate '{expression_to_eval}'. Please use numbers and basic operators (+, -, *, /)."
+
+        if all(c in "0123456789.+-*/() " for c in expression_to_eval):
+            try:
+                result = eval(sanitized_expression)
+                return f"The result of '{expression_to_eval}' is {result}."
+            except ZeroDivisionError:
+                return f"Error: Cannot divide by zero ('{expression_to_eval}')."
+            except SyntaxError:
+                return f"Error: Invalid syntax in calculation ('{expression_to_eval}'). Please check your expression."
+            except Exception as e:
+                logging.error(
+                    f"Error evaluating sanitized expression '{sanitized_expression}': {e}",
+                    exc_info=True,
+                )
+                return f"Could not calculate '{expression_to_eval}'. An unexpected error occurred."
+        else:
+            logging.warning(
+                f"Expression contained disallowed characters, rejecting: '{expression_to_eval}'"
+            )
+            return f"Could not calculate '{expression_to_eval}'. Please use only numbers, spaces, and basic operators (+, -, *, /)."
+
+    return f"Calculator tool would process: '{query}'. (Hint: Try 'calculate 5+3' or 'calculate what is 2*7')"
 
 
 def handle_definition(query: str) -> str:
     logging.info(f"Dictionary received query: {query}")
-    keyword = query.lower().replace("define", "").strip().replace("?", "")
-    if keyword:
-        return f"Dictionary tool would define: '{keyword}'."
-    return f"Dictionary tool would process: '{query}'"
+    keyword_match = re.search(r"define\s+([\w\s]+)", query, re.IGNORECASE)
+    if not keyword_match:
+        simple_keyword = query.lower().replace("define", "").strip().replace("?", "")
+        if not simple_keyword:
+            return "Please specify a word to define after 'define'."
+        keyword_to_define = simple_keyword
+    else:
+        keyword_to_define = keyword_match.group(1).strip()
+
+    if not keyword_to_define:
+        return "Please specify a word to define."
+
+    api_url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{keyword_to_define}"
+    try:
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        print(data)
+
+        if isinstance(data, list) and data:
+            meanings = data[0].get("meanings", [])
+            if meanings:
+                definitions_text = []
+                for i, meaning in enumerate(meanings[:2]):
+                    part_of_speech = meaning.get("partOfSpeech", "N/A")
+                    definitions_list = meaning.get("definitions", [])
+                    if definitions_list:
+                        defs_to_show = [
+                            d.get("definition")
+                            for d in definitions_list[:2]
+                            if d.get("definition")
+                        ]
+                        if defs_to_show:
+                            definitions_text.append(
+                                f"**{part_of_speech.capitalize()}**:\n"
+                                + "\n".join(f"- {d}" for d in defs_to_show)
+                            )
+
+                if definitions_text:
+                    return (
+                        f"**{data[0].get('word', keyword_to_define).capitalize()}**:\n\n"
+                        + "\n\n".join(definitions_text)
+                    )
+                else:
+                    return f"No definitions found for '{keyword_to_define}' in the response."
+            else:
+                return f"No meanings found for '{keyword_to_define}'."
+        elif isinstance(data, dict) and data.get("title") == "No Definitions Found":
+            return f"Sorry, I couldn't find a definition for '{keyword_to_define}'. {data.get('message', '')}"
+        else:
+            logging.warning(
+                f"Unexpected API response structure for '{keyword_to_define}': {data}"
+            )
+            return f"Sorry, received an unexpected response when looking up '{keyword_to_define}'."
+
+    except Exception as e:
+        logging.error(
+            f"Unexpected error in handle_definition for '{keyword_to_define}': {e}",
+            exc_info=True,
+        )
+        return f"An unexpected error occurred while trying to define '{keyword_to_define}'."
 
 
 if prompt := st.chat_input(

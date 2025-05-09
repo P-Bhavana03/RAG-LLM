@@ -9,7 +9,9 @@ This project implements a dynamic RAG (Retrieval Augmented Generation) chatbot u
 - **Vector Store**: Utilizes ChromaDB to store and retrieve document embeddings.
 - **Google Gemini Integration**: Leverages Google Gemini for powerful language model capabilities (LLM) and text embeddings.
 - **Interactive UI**: Built with Streamlit for an easy-to-use chat interface and document management sidebar.
-- **Tool Routing**: Basic keyword-based routing for "calculate" and "define" queries to placeholder tool handlers.
+- **Functional Tools**:
+  - **Calculator**: Evaluates simple arithmetic expressions (e.g., "calculate 2\*7+3").
+  - **Dictionary**: Fetches real word definitions using an online API (e.g., "define synergy").
 - **Direct LLM Fallback**: Answers general queries using the LLM directly if no documents are processed and the query isn't for a tool.
 - **Dynamic Document Management**: Add or remove documents, and the RAG chain updates accordingly.
 - **Logging**: Logs key decisions and processing steps for better observability.
@@ -23,6 +25,7 @@ This project implements a dynamic RAG (Retrieval Augmented Generation) chatbot u
 - **ChromaDB**: For the vector store.
 - **PyPDFLoader**: For loading PDF document content.
 - **Dotenv**: For managing environment variables.
+- **Requests**: For making HTTP requests (used by the Dictionary tool).
 
 ## Setup and Configuration
 
@@ -78,7 +81,8 @@ The application should open in your web browser, usually at `http://localhost:85
     - The RAG chain is (re)built using the updated vector store.
 4.  **Chat Interface**:
     - User enters a query.
-    - If the query contains "calculate" or "define", it's routed to a placeholder tool function.
+    - If the query contains "calculate", it's routed to an internal calculator that evaluates the arithmetic expression.
+    - If the query contains "define", it's routed to a dictionary tool that fetches the definition from an online API.
     - Otherwise, if documents are processed and a RAG chain exists, the query is sent to the RAG chain to retrieve relevant document chunks and generate an answer.
     - If no documents are processed (and it's not a tool query), the query is sent directly to the LLM for a general answer.
     - Responses and (if applicable) sources are displayed.
